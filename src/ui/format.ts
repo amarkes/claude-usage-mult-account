@@ -1,8 +1,8 @@
-import type { AccountOption } from "../usage/accountSelection";
+import type { ClaudeAccount } from "../usage/accountSelection";
 import type { ClaudeUsageSnapshot, FullUsageState } from "../usage/types";
 
-export function accountShortLabel(option: AccountOption): string {
-  return option.id === "claude-work" ? "Trabalho" : "Pessoal";
+export function accountShortLabel(account: ClaudeAccount): string {
+  return account.label;
 }
 
 export function formatPercent(value: number): string {

@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import type { AccountSelectionService } from "../usage/accountSelection";
+import type {
+  AccountSelectionService,
+  ClaudeAccount,
+} from "../usage/accountSelection";
 import type { UsageService } from "../usage/usageService";
 import type { FullUsageState } from "../usage/types";
 import {
@@ -41,11 +44,12 @@ function renderChart(daily: FullUsageState["costs"]["daily"]): string {
 
 function renderHtml(
   state: FullUsageState,
-  selectedProfile: "claude" | "claude-work"
+  selectedAccountId: string,
+  accounts: ClaudeAccount[]
 ): string {
   const { quota: snapshot, costs, statsCache } = state;
 
-  const accountBlock = `<div class="account-row">${renderAccountSelect(selectedProfile)}</div>`;
+  const accountBlock = `<div class="account-row">${renderAccountSelect(selectedAccountId, accounts, { showManage: true })}</div>`;
 
   if (snapshot.unavailableReason) {
     return `<!DOCTYPE html>
@@ -161,12 +165,13 @@ export class UsagePanel implements vscode.Disposable {
 
   private openPanel(): void {
     const state = this.usageService.getState();
-    const profile = this.accountSelection.getSelectedProfile();
+    const accountId = this.accountSelection.getSelectedAccountId();
+    const accounts = this.accountSelection.getAccounts();
 
     if (this.panel) {
       this.panel.reveal();
       if (state) {
-        this.panel.webview.html = renderHtml(state, profile);
+        this.panel.webview.html = renderHtml(state, accountId, accounts);
       }
       return;
     }
@@ -178,9 +183,30 @@ export class UsagePanel implements vscode.Disposable {
       { enableScripts: true, retainContextWhenHidden: true }
     );
 
-    this.panel.webview.onDidReceiveMessage(async (msg: { type: string; profile?: string }) => {
-      if (msg.type === "setProfile" && (msg.profile === "claude" || msg.profile === "claude-work")) {
-        await this.accountSelection.setSelectedProfile(msg.profile);
+    this.panel.webview.onDidReceiveMessage(async (msg: { type: string; accountId?: string }) => {
+      try {
+        if (msg.type === "setAccount" && msg.accountId) {
+          await this.accountSelection.setSelectedAccountId(msg.accountId);
+        } else if (msg.type === "addAccount") {
+          await this.accountSelection.promptAddAccount();
+        } else if (msg.type === "removeAccount" && msg.accountId) {
+          const account = this.accountSelection
+            .getCustomAccounts()
+            .find((a) => a.id === msg.accountId);
+          if (!account) {
+            return;
+          }
+          const confirm = await vscode.window.showWarningMessage(
+            `Remover a conta "${account.label}"?`,
+            "Remover",
+            "Cancelar"
+          );
+          if (confirm === "Remover") {
+            await this.accountSelection.removeCustomAccount(msg.accountId);
+          }
+        }
+      } catch (e) {
+        void vscode.window.showErrorMessage(String(e));
       }
     });
 
@@ -189,7 +215,7 @@ export class UsagePanel implements vscode.Disposable {
     });
 
     if (state) {
-      this.panel.webview.html = renderHtml(state, profile);
+      this.panel.webview.html = renderHtml(state, accountId, accounts);
     }
 
     const refreshPanel = () => {
@@ -197,7 +223,8 @@ export class UsagePanel implements vscode.Disposable {
       if (this.panel && s) {
         this.panel.webview.html = renderHtml(
           s,
-          this.accountSelection.getSelectedProfile()
+          this.accountSelection.getSelectedAccountId(),
+          this.accountSelection.getAccounts()
         );
       }
     };

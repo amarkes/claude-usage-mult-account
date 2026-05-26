@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import type { AccountSelectionService } from "../usage/accountSelection";
-import { ACCOUNT_OPTIONS } from "../usage/accountSelection";
 import type { UsageService } from "../usage/usageService";
 import {
   ACCOUNT_SELECT_SCRIPT,
@@ -31,9 +30,33 @@ export class AccountSidebarViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [],
     };
 
-    webviewView.webview.onDidReceiveMessage(async (msg: { type: string; profile?: string }) => {
-      if (msg.type === "setProfile" && (msg.profile === "claude" || msg.profile === "claude-work")) {
-        await this.accountSelection.setSelectedProfile(msg.profile);
+    webviewView.webview.onDidReceiveMessage(async (msg: {
+      type: string;
+      accountId?: string;
+    }) => {
+      try {
+        if (msg.type === "setAccount" && msg.accountId) {
+          await this.accountSelection.setSelectedAccountId(msg.accountId);
+        } else if (msg.type === "addAccount") {
+          await this.accountSelection.promptAddAccount();
+        } else if (msg.type === "removeAccount" && msg.accountId) {
+          const account = this.accountSelection
+            .getCustomAccounts()
+            .find((a) => a.id === msg.accountId);
+          if (!account) {
+            return;
+          }
+          const confirm = await vscode.window.showWarningMessage(
+            `Remover a conta "${account.label}"?`,
+            "Remover",
+            "Cancelar"
+          );
+          if (confirm === "Remover") {
+            await this.accountSelection.removeCustomAccount(msg.accountId);
+          }
+        }
+      } catch (e) {
+        void vscode.window.showErrorMessage(String(e));
       }
     });
 
@@ -47,7 +70,8 @@ export class AccountSidebarViewProvider implements vscode.WebviewViewProvider {
   }
 
   private render(): string {
-    const selected = this.accountSelection.getSelectedProfile();
+    const selectedId = this.accountSelection.getSelectedAccountId();
+    const accounts = this.accountSelection.getAccounts();
     const state = this.usageService.getState();
 
     let summary = '<p class="muted">Carregando dados…</p>';
@@ -85,10 +109,10 @@ export class AccountSidebarViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
   <div class="account-row">
-    ${renderAccountSelect(selected, ACCOUNT_OPTIONS)}
+    ${renderAccountSelect(selectedId, accounts, { showManage: true })}
   </div>
   ${summary}
-  <p class="hint">Só os dados da conta selecionada são exibidos.</p>
+  <p class="hint">A conta <strong>Padrão</strong> usa ~/.claude. Adicione outras pastas conforme sua configuração (ex. CLAUDE_CONFIG_DIR).</p>
   <script>${ACCOUNT_SELECT_SCRIPT}</script>
 </body>
 </html>`;

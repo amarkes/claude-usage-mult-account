@@ -1,8 +1,8 @@
 {
   "name": "claude-usage-status",
-  "displayName": "Claude Usage Status",
+  "displayName": "Claude Usage Multi Account",
   "description": "Quota, custo estimado e histórico local do Claude Code no VS Code",
-  "version": "0.3.0",
+  "version": "1.1.0",
   "publisher": "ClaudeUsageMultAcoount",
   "engines": {
     "vscode": "^1.85.0"
@@ -40,12 +40,17 @@
         "title": "Claude Usage: Recalcular custos (JSONL)"
       },
       {
-        "command": "claudeUsage.useProfileClaude",
-        "title": "Claude Usage: Usar conta ~/.claude"
+        "command": "claudeUsage.useDefaultAccount",
+        "title": "Claude Usage: Usar conta padrão (~/.claude)"
       },
       {
-        "command": "claudeUsage.useProfileClaudeWork",
-        "title": "Claude Usage: Usar conta ~/.claude-work"
+        "command": "claudeUsage.addAccount",
+        "title": "Claude Usage: Adicionar pasta de conta",
+        "icon": "$(add)"
+      },
+      {
+        "command": "claudeUsage.removeAccount",
+        "title": "Claude Usage: Remover conta cadastrada"
       },
       {
         "command": "claudeUsage.pickAccount",
@@ -77,6 +82,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "claudeUsage.addAccount",
+          "when": "view == claudeUsage.accountPicker",
+          "group": "navigation"
+        },
         {
           "command": "claudeUsage.pickAccount",
           "when": "view == claudeUsage.accountPicker || view == claudeUsage.sidebar",
@@ -124,16 +134,16 @@
           "default": "default",
           "enum": ["default", "claude", "claude-work"],
           "enumDescriptions": [
-            "Conta em ~/.claude (padrão quando nada é configurado)",
-            "Mesmo que default — ~/.claude",
-            "Conta alternativa em ~/.claude-work"
+            "Legado — use a sidebar Conta para cadastrar pastas",
+            "Legado — mesmo que default",
+            "Legado — prefira Adicionar pasta na sidebar"
           ],
-          "description": "Qual pasta de configuração / conta do Claude usar. Só lê dados dessa pasta."
+          "description": "Legado. A conta ativa é escolhida na sidebar (Conta) e salva no storage da extensão."
         },
         "claudeUsage.configDir": {
           "type": "string",
           "default": "",
-          "description": "Caminho customizado (ex.: ~/.claude-work). Se preenchido, substitui configProfile."
+          "description": "Se preenchido, força esta pasta e ignora a conta selecionada na sidebar (uso avançado)."
         },
         "claudeUsage.debug": {
           "type": "boolean",
@@ -183,7 +193,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package --allow-missing-repository --skip-license"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

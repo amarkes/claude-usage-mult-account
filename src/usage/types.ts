@@ -86,7 +86,8 @@ export interface StatsCacheTotals {
 export interface ActiveConfigInfo {
   dir: string;
   label: string;
-  profile: string;
+  accountId: string;
+  accountLabel: string;
 }
 
 export interface FullUsageState {

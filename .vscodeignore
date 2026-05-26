@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+build.sh
 .gitignore
 tsconfig.json
 **/*.ts

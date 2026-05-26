@@ -5,7 +5,10 @@ import { formatPercent, formatUsd } from "./format";
 export async function exportUsageCsv(state: FullUsageState): Promise<void> {
   const lines: string[] = [
     "section,field,value",
-    "config,profile," + state.activeConfig.profile,
+    "config,accountId,accountLabel," +
+      state.activeConfig.accountId +
+      "," +
+      state.activeConfig.accountLabel,
     "config,dir," + state.activeConfig.dir,
     "quota,source," + state.quota.source,
     "quota,updatedAt," + state.quota.updatedAt,

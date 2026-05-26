@@ -45,11 +45,14 @@ export function activate(context: vscode.ExtensionContext): void {
       accountSelection.pickAccount()
     ),
     vscode.commands.registerCommand("claudeUsage.showLog", () => logger.show()),
-    vscode.commands.registerCommand("claudeUsage.useProfileClaude", () =>
-      accountSelection.setSelectedProfile("claude")
+    vscode.commands.registerCommand("claudeUsage.useDefaultAccount", () =>
+      accountSelection.setSelectedAccountId("default")
     ),
-    vscode.commands.registerCommand("claudeUsage.useProfileClaudeWork", () =>
-      accountSelection.setSelectedProfile("claude-work")
+    vscode.commands.registerCommand("claudeUsage.addAccount", () =>
+      accountSelection.promptAddAccount()
+    ),
+    vscode.commands.registerCommand("claudeUsage.removeAccount", () =>
+      accountSelection.promptRemoveAccount()
     ),
     vscode.commands.registerCommand("claudeUsage.exportCsv", async () => {
       const state = usageService.getState();

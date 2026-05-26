@@ -9,6 +9,7 @@ import { UsageAlerts } from "./alerts";
 import { UsageLogger } from "./logger";
 import { parseCostsFromJsonl } from "./jsonlCostParser";
 import { readStatsCache } from "./statsCacheReader";
+import { DEFAULT_ACCOUNT_ID } from "./accountSelection";
 import { resolveClaudePaths, type ResolvedClaudePaths } from "./paths";
 import type { ClaudeUsageSnapshot, CostSummary, FullUsageState } from "./types";
 
@@ -19,7 +20,7 @@ function buildUnavailableReason(
   const lines = [
     `Sem quota em ${paths.label}.`,
     apiError ?? "Não foi possível ler a API nem o cache local.",
-    "Conta Team: faça login no Claude Code com esta pasta (CLAUDE_CONFIG_DIR=~/.claude-work).",
+    "Faça login no Claude Code usando esta pasta (variável CLAUDE_CONFIG_DIR ou troca de conta na extensão).",
     "Credenciais no macOS ficam no Keychain. Tente: claudeUsage.preferApi = true",
   ];
   return lines.join(" ");
@@ -92,7 +93,7 @@ export class UsageService implements vscode.Disposable {
     const preferApi =
       options?.forceApi ||
       cfg.get<boolean>("preferApi", false) ||
-      this.accountSelection.getSelectedProfile() === "claude-work";
+      this.accountSelection.getSelectedAccountId() !== DEFAULT_ACCOUNT_ID;
 
     this.logger.log(`Perfil ativo: ${paths.label} (${paths.configDir})`);
 
@@ -187,7 +188,7 @@ export class UsageService implements vscode.Disposable {
       };
     }
 
-    const option = this.accountSelection.getSelectedOption();
+    const account = this.accountSelection.getSelectedAccount();
     const [costs, statsCache] = await Promise.all([
       this.loadCosts(paths),
       readStatsCache(paths.statsCachePath),
@@ -200,7 +201,8 @@ export class UsageService implements vscode.Disposable {
       activeConfig: {
         dir: paths.configDir,
         label: paths.label,
-        profile: option.id,
+        accountId: account.id,
+        accountLabel: account.label,
       },
     };
     this.alerts.check(quota);
@@ -222,13 +224,16 @@ export class UsageService implements vscode.Disposable {
 
   private getResolvedPaths(): ResolvedClaudePaths {
     const cfg = vscode.workspace.getConfiguration("claudeUsage");
-    const profile = this.accountSelection.toConfigProfile(
-      this.accountSelection.getSelectedProfile()
-    );
-    return resolveClaudePaths({
-      profile,
-      customDir: cfg.get<string>("configDir", ""),
-    });
+    const settingsDir = cfg.get<string>("configDir", "").trim();
+    if (settingsDir) {
+      return resolveClaudePaths({ customDir: settingsDir });
+    }
+
+    const account = this.accountSelection.getSelectedAccount();
+    if (account.isDefault) {
+      return resolveClaudePaths({ profile: "default" });
+    }
+    return resolveClaudePaths({ customDir: account.dir });
   }
 
   private async loadCosts(paths: ResolvedClaudePaths): Promise<CostSummary> {
