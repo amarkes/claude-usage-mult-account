@@ -1,0 +1,193 @@
+{
+  "name": "claude-usage-status",
+  "displayName": "Claude Usage Status",
+  "description": "Quota, custo estimado e histórico local do Claude Code no VS Code",
+  "version": "0.3.0",
+  "publisher": "ClaudeUsageMultAcoount",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeUsage.refresh",
+        "title": "Claude Usage: Atualizar",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeUsage.showPanel",
+        "title": "Claude Usage: Abrir painel",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "claudeUsage.exportCsv",
+        "title": "Claude Usage: Exportar CSV",
+        "icon": "$(export)"
+      },
+      {
+        "command": "claudeUsage.showLog",
+        "title": "Claude Usage: Mostrar log de debug"
+      },
+      {
+        "command": "claudeUsage.refreshCosts",
+        "title": "Claude Usage: Recalcular custos (JSONL)"
+      },
+      {
+        "command": "claudeUsage.useProfileClaude",
+        "title": "Claude Usage: Usar conta ~/.claude"
+      },
+      {
+        "command": "claudeUsage.useProfileClaudeWork",
+        "title": "Claude Usage: Usar conta ~/.claude-work"
+      },
+      {
+        "command": "claudeUsage.pickAccount",
+        "title": "Claude Usage: Escolher conta",
+        "icon": "$(account)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claude-usage",
+          "title": "Claude Usage",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "claude-usage": [
+        {
+          "type": "webview",
+          "id": "claudeUsage.accountPicker",
+          "name": "Conta"
+        },
+        {
+          "id": "claudeUsage.sidebar",
+          "name": "Detalhes"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeUsage.pickAccount",
+          "when": "view == claudeUsage.accountPicker || view == claudeUsage.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeUsage.refresh",
+          "when": "view == claudeUsage.accountPicker || view == claudeUsage.sidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeUsage.exportCsv",
+          "when": "view == claudeUsage.sidebar",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude Usage",
+      "properties": {
+        "claudeUsage.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 15,
+          "description": "Intervalo em segundos para atualizar quota e custos."
+        },
+        "claudeUsage.preferApi": {
+          "type": "boolean",
+          "default": false,
+          "description": "Priorizar API OAuth em vez do cache local."
+        },
+        "claudeUsage.apiOnFocus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Atualizar ao focar a janela (respeita cooldown da API)."
+        },
+        "claudeUsage.apiCooldownSeconds": {
+          "type": "number",
+          "default": 90,
+          "minimum": 30,
+          "description": "Intervalo mínimo entre chamadas à API de quota (evita HTTP 429)."
+        },
+        "claudeUsage.configProfile": {
+          "type": "string",
+          "default": "default",
+          "enum": ["default", "claude", "claude-work"],
+          "enumDescriptions": [
+            "Conta em ~/.claude (padrão quando nada é configurado)",
+            "Mesmo que default — ~/.claude",
+            "Conta alternativa em ~/.claude-work"
+          ],
+          "description": "Qual pasta de configuração / conta do Claude usar. Só lê dados dessa pasta."
+        },
+        "claudeUsage.configDir": {
+          "type": "string",
+          "default": "",
+          "description": "Caminho customizado (ex.: ~/.claude-work). Se preenchido, substitui configProfile."
+        },
+        "claudeUsage.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Registrar eventos no painel Output \"Claude Usage\"."
+        },
+        "claudeUsage.enableAlerts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notificar quando a quota passar dos limites configurados."
+        },
+        "claudeUsage.alertThresholdWarning": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.1,
+          "maximum": 1,
+          "description": "Limite (0–1) para alerta de atenção."
+        },
+        "claudeUsage.alertThresholdCritical": {
+          "type": "number",
+          "default": 0.9,
+          "minimum": 0.1,
+          "maximum": 1,
+          "description": "Limite (0–1) para alerta crítico."
+        },
+        "claudeUsage.enableCostTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Calcular custo estimado a partir dos JSONL em ~/.claude/projects."
+        },
+        "claudeUsage.workspaceCostOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Considerar apenas o projeto/workspace aberto no custo."
+        },
+        "claudeUsage.costHistoryDays": {
+          "type": "number",
+          "default": 7,
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Dias de histórico de custo no painel e CSV."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
