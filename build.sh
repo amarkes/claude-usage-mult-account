@@ -120,9 +120,7 @@ npm run compile
 
 echo ""
 echo "Packaging VSIX..."
-npx --yes @vscode/vsce package --out "$ROOT" \
-  --allow-missing-repository \
-  --skip-license
+npx --yes @vscode/vsce package --out "$ROOT" --skip-license
 
 VSIX="$ROOT/claude-usage-status-${NEW}.vsix"
 [[ -f "$VSIX" ]] || VSIX="$(ls -t "$ROOT"/*.vsix 2>/dev/null | head -1)"

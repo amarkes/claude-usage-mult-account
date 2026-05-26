@@ -1,9 +1,17 @@
 {
-  "name": "claude-usage-status",
-  "displayName": "Claude Usage Multi Account",
+  "name": "claude-status-usage-multi-account",
+  "displayName": "Claude StatusUsage Multi Account",
   "description": "Quota, custo estimado e histórico local do Claude Code no VS Code",
-  "version": "1.1.0",
-  "publisher": "ClaudeUsageMultAcoount",
+  "version": "1.7.0",
+  "publisher": "ClaudeStatusUsageMultiAccount",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amarkes/claude-usage-mult-account.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amarkes/claude-usage-mult-account/issues"
+  },
+  "homepage": "https://github.com/amarkes/claude-usage-mult-account#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -193,7 +201,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package --allow-missing-repository --skip-license"
+    "package": "vsce package --skip-license"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
