@@ -2,6 +2,10 @@
 
 All notable changes to this extension are documented here.
 
+## [1.7.1] - 2026-05-27
+- fix: icon app
+
+
 ## [1.7.0] - 2026-05-26
 - fix: new repository in marketing place
 
