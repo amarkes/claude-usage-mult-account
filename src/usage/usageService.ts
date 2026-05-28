@@ -3,6 +3,7 @@ import * as fsSync from "fs";
 import * as vscode from "vscode";
 import type { AccountSelectionService } from "./accountSelection";
 import { cacheAgeMinutes } from "./cacheReader";
+import { normalizeUtilization } from "./utilization";
 import { writeStatusCache } from "./cacheWriter";
 import { fetchUsageFromApi, UsageApiError } from "./apiClient";
 import { UsageAlerts } from "./alerts";
@@ -167,6 +168,8 @@ export class UsageService implements vscode.Disposable {
       return null;
     };
 
+    const cacheMaxAgeMin = 5;
+
     if (tryApiFirst) {
       quota = await fetchApiLive();
       if (!quota) {
@@ -174,6 +177,13 @@ export class UsageService implements vscode.Disposable {
       }
     } else {
       quota = loadStaleCache();
+      const cacheAge = quota ? cacheAgeMinutes(quota.updatedAt) : Infinity;
+      if (cacheAge > cacheMaxAgeMin) {
+        const live = await fetchApiLive();
+        if (live) {
+          quota = live;
+        }
+      }
       if (!quota) {
         quota = await fetchApiLive();
       }
@@ -320,6 +330,7 @@ export class UsageService implements vscode.Disposable {
           reset5hAt?: number;
           reset7dAt?: number;
           limitStatus?: string;
+          quotaFromExtraOnly?: boolean;
           extraUsage?: ClaudeUsageSnapshot["data"]["extraUsage"];
         };
       };
@@ -341,12 +352,21 @@ export class UsageService implements vscode.Disposable {
         isStale: true,
         staleMinutes: age,
         data: {
-          utilization5h: u.utilization5h,
-          utilization7d: u.utilization7d,
+          utilization5h: normalizeUtilization(u.utilization5h),
+          utilization7d: normalizeUtilization(u.utilization7d),
           reset5hAt: u.reset5hAt,
           reset7dAt: u.reset7dAt,
           limitStatus: u.limitStatus,
-          extraUsage: u.extraUsage,
+          quotaFromExtraOnly: u.quotaFromExtraOnly,
+          extraUsage: u.extraUsage
+            ? {
+                ...u.extraUsage,
+                utilization:
+                  u.extraUsage.utilization !== undefined
+                    ? normalizeUtilization(u.extraUsage.utilization)
+                    : undefined,
+              }
+            : undefined,
         },
       };
     } catch {

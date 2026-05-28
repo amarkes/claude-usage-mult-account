@@ -93,7 +93,8 @@ function renderHtml(
     ? `<p class="muted">stats-cache.json: ${formatUsd(statsCache.totalCostUsd)}</p>`
     : "";
 
-  const quota5hLabel = data.extraUsage?.isEnabled ? "Uso (extra / Team)" : "Janela 5 horas";
+  const extraOnly = data.quotaFromExtraOnly === true;
+  const quota5hLabel = extraOnly ? "Uso (extra / Team)" : "Janela 5 horas";
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -129,7 +130,7 @@ function renderHtml(
 
   <h3>Quota — ${esc(state.activeConfig.label)}</h3>
   ${bar(quota5hLabel, data.utilization5h, data.reset5hAt)}
-  ${!data.extraUsage?.isEnabled ? bar("Janela 7 dias", data.utilization7d, data.reset7dAt) : ""}
+  ${!extraOnly ? bar("Janela 7 dias", data.utilization7d, data.reset7dAt) : ""}
   ${data.sevenDaySonnet ? bar("Sonnet 7 dias", data.sevenDaySonnet.utilization, data.sevenDaySonnet.resetsAt) : ""}
   ${data.limitStatus ? `<p>Status: <strong>${esc(data.limitStatus)}</strong></p>` : ""}
   ${extra}

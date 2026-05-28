@@ -11,6 +11,8 @@ export interface ClaudeUsageData {
   reset5hAt?: number;
   reset7dAt?: number;
   limitStatus?: LimitStatus;
+  /** Quota veio só de créditos extra (Team), sem janelas 5h/7d na API. */
+  quotaFromExtraOnly?: boolean;
   sevenDaySonnet?: UsageWindow;
   extraUsage?: {
     isEnabled: boolean;

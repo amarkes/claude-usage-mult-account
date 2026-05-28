@@ -1,7 +1,6 @@
 import * as fs from "fs/promises";
-import type { ClaudeUsageSnapshot } from "./types";
-
-import type { ClaudeUsageData } from "./types";
+import type { ClaudeUsageSnapshot, ClaudeUsageData } from "./types";
+import { normalizeUtilization } from "./utilization";
 
 interface StatusCacheFile {
   version?: number;
@@ -39,13 +38,27 @@ export async function readStatusCache(
   }
 
   const data: ClaudeUsageData = {
-    utilization5h: u.utilization5h,
-    utilization7d: u.utilization7d,
+    utilization5h: normalizeUtilization(u.utilization5h),
+    utilization7d: normalizeUtilization(u.utilization7d),
     reset5hAt: u.reset5hAt,
     reset7dAt: u.reset7dAt,
     limitStatus: u.limitStatus,
-    sevenDaySonnet: u.sevenDaySonnet,
-    extraUsage: u.extraUsage,
+    quotaFromExtraOnly: u.quotaFromExtraOnly,
+    sevenDaySonnet: u.sevenDaySonnet
+      ? {
+          utilization: normalizeUtilization(u.sevenDaySonnet.utilization),
+          resetsAt: u.sevenDaySonnet.resetsAt,
+        }
+      : undefined,
+    extraUsage: u.extraUsage
+      ? {
+          ...u.extraUsage,
+          utilization:
+            u.extraUsage.utilization !== undefined
+              ? normalizeUtilization(u.extraUsage.utilization)
+              : undefined,
+        }
+      : undefined,
   };
 
   return {

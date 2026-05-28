@@ -1,5 +1,6 @@
 import type { ClaudeUsageSnapshot, ClaudeUsageData } from "./types";
 import { resolveAccessToken } from "./credentials";
+import { normalizeUtilization, parseResetsAt } from "./utilization";
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 
@@ -21,9 +22,12 @@ export class UsageApiError extends Error {
 }
 
 interface OAuthUsageResponse {
-  five_hour?: { utilization: number | null; resets_at?: number };
-  seven_day?: { utilization: number | null; resets_at?: number };
-  seven_day_sonnet?: { utilization: number | null; resets_at?: number };
+  five_hour?: { utilization: number | null; resets_at?: number | string | null };
+  seven_day?: { utilization: number | null; resets_at?: number | string | null };
+  seven_day_sonnet?: {
+    utilization: number | null;
+    resets_at?: number | string | null;
+  };
   extra_usage?: {
     is_enabled?: boolean;
     monthly_limit?: number;
@@ -32,51 +36,91 @@ interface OAuthUsageResponse {
     currency?: string;
     disabled_reason?: string | null;
   };
-  omelette_promotional?: { utilization: number | null; resets_at?: number | null };
+  omelette_promotional?: {
+    utilization: number | null;
+    resets_at?: number | string | null;
+  };
 }
 
 function pickWindow(
-  w?: { utilization: number | null; resets_at?: number | null } | null
+  w?: {
+    utilization: number | null;
+    resets_at?: number | string | null;
+  } | null
 ): { utilization: number; resetsAt?: number } | undefined {
   if (!w || w.utilization === null || w.utilization === undefined) {
     return undefined;
   }
   return {
-    utilization: w.utilization,
-    resetsAt: w.resets_at ?? undefined,
+    utilization: normalizeUtilization(w.utilization),
+    resetsAt: parseResetsAt(w.resets_at),
   };
 }
 
-function percentToRatio(value: number): number {
-  return value > 1 ? value / 100 : value;
+function extraCreditsRatio(
+  extra: NonNullable<OAuthUsageResponse["extra_usage"]>
+): number | undefined {
+  const limit = extra.monthly_limit;
+  const used = extra.used_credits;
+  if (
+    limit === undefined ||
+    limit <= 0 ||
+    used === undefined ||
+    !Number.isFinite(used)
+  ) {
+    return undefined;
+  }
+  return Math.min(1, used / limit);
 }
 
 function mapExtraUsage(
   extra: NonNullable<OAuthUsageResponse["extra_usage"]>
 ): ClaudeUsageData["extraUsage"] {
+  const fromCredits = extraCreditsRatio(extra);
+  const fromApi =
+    extra.utilization !== null && extra.utilization !== undefined
+      ? normalizeUtilization(extra.utilization)
+      : undefined;
+
   return {
     isEnabled: extra.is_enabled !== false,
     monthlyLimit: extra.monthly_limit,
     usedCredits: extra.used_credits,
-    utilization:
-      extra.utilization !== null && extra.utilization !== undefined
-        ? percentToRatio(extra.utilization)
-        : undefined,
+    utilization: fromApi ?? fromCredits,
   };
 }
 
-function mapApiResponse(body: OAuthUsageResponse): ClaudeUsageData | null {
+function mapExtraOnlyQuota(
+  extra: NonNullable<OAuthUsageResponse["extra_usage"]>
+): ClaudeUsageData {
+  const mapped = mapExtraUsage(extra);
+  const util =
+    mapped?.utilization ??
+    extraCreditsRatio(extra) ??
+    0;
+
+  return {
+    utilization5h: util,
+    utilization7d: util,
+    limitStatus: "allowed",
+    extraUsage: mapped,
+    quotaFromExtraOnly: true,
+  };
+}
+
+export function mapApiResponse(body: OAuthUsageResponse): ClaudeUsageData | null {
   const five = pickWindow(body.five_hour);
   const seven = pickWindow(body.seven_day);
+  const sonnet = pickWindow(body.seven_day_sonnet);
 
-  if (five && seven) {
+  if (five || seven) {
     const data: ClaudeUsageData = {
-      utilization5h: five.utilization,
-      utilization7d: seven.utilization,
-      reset5hAt: five.resetsAt,
-      reset7dAt: seven.resetsAt,
+      utilization5h: five?.utilization ?? 0,
+      utilization7d: seven?.utilization ?? 0,
+      reset5hAt: five?.resetsAt,
+      reset7dAt: seven?.resetsAt,
+      quotaFromExtraOnly: false,
     };
-    const sonnet = pickWindow(body.seven_day_sonnet);
     if (sonnet) {
       data.sevenDaySonnet = sonnet;
     }
@@ -87,17 +131,8 @@ function mapApiResponse(body: OAuthUsageResponse): ClaudeUsageData | null {
   }
 
   const extra = body.extra_usage;
-  if (extra && (extra.is_enabled !== false || extra.utilization != null)) {
-    const util =
-      extra.utilization !== null && extra.utilization !== undefined
-        ? percentToRatio(extra.utilization)
-        : 0;
-    return {
-      utilization5h: util,
-      utilization7d: util,
-      limitStatus: "allowed",
-      extraUsage: mapExtraUsage(extra),
-    };
+  if (extra?.is_enabled) {
+    return mapExtraOnlyQuota(extra);
   }
 
   const promo = pickWindow(body.omelette_promotional);
@@ -107,6 +142,7 @@ function mapApiResponse(body: OAuthUsageResponse): ClaudeUsageData | null {
       utilization7d: promo.utilization,
       reset5hAt: promo.resetsAt,
       limitStatus: "allowed",
+      quotaFromExtraOnly: false,
     };
   }
 

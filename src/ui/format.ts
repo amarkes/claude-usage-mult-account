@@ -70,8 +70,7 @@ export function statusBarText(
   if (snapshot.unavailableReason) {
     return `${prefix} $(warning) sem quota`;
   }
-  const isTeamExtra =
-    snapshot.source === "api" && Boolean(snapshot.data.extraUsage?.isEnabled);
+  const isTeamExtra = snapshot.data.quotaFromExtraOnly === true;
   const label = isTeamExtra ? "Extra" : "5h";
   const five = formatPercent(snapshot.data.utilization5h);
   const reset = formatResetTime(snapshot.data.reset5hAt);

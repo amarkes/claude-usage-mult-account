@@ -2,6 +2,10 @@
 
 All notable changes to this extension are documented here.
 
+## [1.7.2] - 2026-05-28
+- fix: calculate porcent erros
+
+
 ## [1.7.1] - 2026-05-27
 - fix: icon app
 
