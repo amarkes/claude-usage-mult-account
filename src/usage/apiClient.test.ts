@@ -43,4 +43,13 @@ assert.ok(hybrid);
 assert.equal(hybrid.utilization7d, 0.13);
 assert.equal(hybrid.quotaFromExtraOnly, false);
 
+// Regressão: API retorna utilization=1 (1%, inteiro) — não deve ser interpretado como 100%
+const onePercent = mapApiResponse({
+  five_hour: { utilization: 8, resets_at: 1775808000 },
+  seven_day: { utilization: 1, resets_at: 1775808000 },
+});
+assert.ok(onePercent);
+assert.equal(onePercent.utilization5h, 0.08);
+assert.equal(onePercent.utilization7d, 0.01);
+
 console.log("apiClient.test.ts: ok");

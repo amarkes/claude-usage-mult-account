@@ -87,6 +87,7 @@ function mapExtraUsage(
     monthlyLimit: extra.monthly_limit,
     usedCredits: extra.used_credits,
     utilization: fromApi ?? fromCredits,
+    currency: extra.currency ?? undefined,
   };
 }
 

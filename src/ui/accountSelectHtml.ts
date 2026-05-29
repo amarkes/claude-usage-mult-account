@@ -43,7 +43,7 @@ export function renderAccountSelect(
 
 export const ACCOUNT_SELECT_SCRIPT = `
 (function() {
-  const vscode = acquireVsCodeApi();
+  const vscode = window.__cvscode !== undefined ? window.__cvscode : (window.__cvscode = acquireVsCodeApi());
   const sel = document.getElementById('account-select');
   if (sel) {
     sel.addEventListener('change', () => {

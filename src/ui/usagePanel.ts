@@ -83,10 +83,27 @@ function renderHtml(
   };
 
   let extra = "";
-  if (data.extraUsage?.isEnabled) {
+  if (data.extraUsage?.isEnabled && data.quotaFromExtraOnly) {
+    // Team account: quota comes entirely from monthly credits — show full credit grid
     const ex = data.extraUsage;
-    extra = `<p>Extra usage (Team): ${ex.utilization !== undefined ? formatPercent(ex.utilization) : "ativo"}
-      ${ex.usedCredits !== undefined && ex.monthlyLimit !== undefined ? ` · ${ex.usedCredits.toFixed(0)} / ${ex.monthlyLimit.toFixed(0)} créditos` : ""}</p>`;
+    const isCurrency = ex.currency === "USD" || ex.currency === "usd";
+    const fmt = (v: number) => isCurrency ? formatUsd(v) : `${v.toFixed(0)} créditos`;
+    const limitLine = ex.monthlyLimit !== undefined
+      ? `<div class="team-stat"><span class="team-label">Limite mensal</span><strong>${fmt(ex.monthlyLimit)}</strong></div>`
+      : "";
+    const usedLine = ex.usedCredits !== undefined
+      ? `<div class="team-stat"><span class="team-label">Gasto no mês</span><strong>${fmt(ex.usedCredits)}</strong></div>`
+      : "";
+    const remainingLine = ex.monthlyLimit !== undefined && ex.usedCredits !== undefined
+      ? `<div class="team-stat"><span class="team-label">Saldo restante</span><strong>${fmt(Math.max(0, ex.monthlyLimit - ex.usedCredits))}</strong></div>`
+      : "";
+    const avgDaily = costs.daily.length > 0
+      ? costs.daily.reduce((s, d) => s + d.costUsd, 0) / costs.daily.length
+      : undefined;
+    const avgLine = avgDaily !== undefined
+      ? `<div class="team-stat"><span class="team-label">Média diária (${costs.daily.length}d)</span><strong>${formatUsd(avgDaily)}</strong></div>`
+      : "";
+    extra = `<div class="team-grid">${limitLine}${usedLine}${remainingLine}${avgLine}</div>`;
   }
 
   const statsLine = statsCache?.totalCostUsd
@@ -121,11 +138,24 @@ function renderHtml(
     .chart-val { font-size: 10px; opacity: 0.9; }
     .muted { opacity: 0.65; font-size: 12px; }
     .source { margin-top: 24px; font-size: 11px; opacity: 0.6; }
+    .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 18px; }
+    .team-stat { padding: 10px 12px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; }
+    .team-label { display: block; font-size: 11px; opacity: 0.75; margin-bottom: 4px; }
+    .team-stat strong { font-size: 18px; }
+    .refresh-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .refresh-btn { padding: 4px 12px; font-size: 12px; cursor: pointer; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 3px; }
+    .refresh-btn:hover { background: var(--vscode-button-hoverBackground); }
+    .refresh-btn:disabled { opacity: 0.5; cursor: default; }
+    .refresh-status { font-size: 11px; opacity: 0.7; }
     ${MODEL_TABLE_STYLES}
   </style>
 </head>
 <body>
-  <h2>Claude Usage</h2>
+  <div class="refresh-row">
+    <h2 style="margin:0;flex:1">Claude Usage</h2>
+    <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">↻ Atualizar</button>
+    <span class="refresh-status" id="refreshStatus"></span>
+  </div>
   ${accountBlock}
 
   <h3>Quota — ${esc(state.activeConfig.label)}</h3>
@@ -147,7 +177,25 @@ function renderHtml(
 
   ${statsLine}
   <p class="source">${esc(state.activeConfig.dir)} · ${snapshot.source} · ${esc(snapshot.updatedAt)}</p>
-  <script>${ACCOUNT_SELECT_SCRIPT}</script>
+  <script>
+    const vscode = (window.__cvscode = acquireVsCodeApi());
+    function doRefresh() {
+      const btn = document.getElementById('refreshBtn');
+      const status = document.getElementById('refreshStatus');
+      if (btn) btn.disabled = true;
+      if (status) status.textContent = 'Atualizando…';
+      vscode.postMessage({ type: 'refresh' });
+    }
+    window.addEventListener('message', (e) => {
+      if (e.data?.type === 'refreshing') {
+        const btn = document.getElementById('refreshBtn');
+        const status = document.getElementById('refreshStatus');
+        if (btn) btn.disabled = true;
+        if (status) status.textContent = 'Atualizando…';
+      }
+    });
+    ${ACCOUNT_SELECT_SCRIPT}
+  </script>
 </body>
 </html>`;
 }
@@ -186,7 +234,10 @@ export class UsagePanel implements vscode.Disposable {
 
     this.panel.webview.onDidReceiveMessage(async (msg: { type: string; accountId?: string }) => {
       try {
-        if (msg.type === "setAccount" && msg.accountId) {
+        if (msg.type === "refresh") {
+          this.panel?.webview.postMessage({ type: "refreshing" });
+          await this.usageService.refresh({ forceApi: true });
+        } else if (msg.type === "setAccount" && msg.accountId) {
           await this.accountSelection.setSelectedAccountId(msg.accountId);
         } else if (msg.type === "addAccount") {
           await this.accountSelection.promptAddAccount();

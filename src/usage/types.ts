@@ -19,6 +19,7 @@ export interface ClaudeUsageData {
     monthlyLimit?: number;
     usedCredits?: number;
     utilization?: number;
+    currency?: string;
   };
 }
 

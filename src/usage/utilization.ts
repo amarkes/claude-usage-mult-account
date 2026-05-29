@@ -3,7 +3,8 @@ export function normalizeUtilization(value: number): number {
   if (!Number.isFinite(value) || value < 0) {
     return 0;
   }
-  return value > 1 ? value / 100 : value;
+  // API returns integer percentages (0–100). value=1 means 1%, not 100%.
+  return value >= 1 ? value / 100 : value;
 }
 
 /** Aceita unix (s) ou ISO 8601 retornado pela API OAuth. */

@@ -323,6 +323,7 @@ export class UsageService implements vscode.Disposable {
     try {
       const raw = fsSync.readFileSync(paths.statusCachePath, "utf8");
       const parsed = JSON.parse(raw) as {
+        version?: number;
         updatedAt?: string;
         usageData?: {
           utilization5h?: number;
@@ -345,6 +346,9 @@ export class UsageService implements vscode.Disposable {
       const updatedAt = parsed.updatedAt ?? new Date().toISOString();
       const age = cacheAgeMinutes(updatedAt);
       this.logger.log(`Cache local (${age} min): ${paths.statusCachePath}`);
+      // v2+ cache stores pre-normalized values (0–1); skip re-normalization.
+      const alreadyNormalized = typeof parsed.version === "number" && parsed.version >= 2;
+      const norm = (v: number) => alreadyNormalized ? Math.min(1, Math.max(0, v)) : normalizeUtilization(v);
       return {
         source: "cache",
         updatedAt,
@@ -352,8 +356,8 @@ export class UsageService implements vscode.Disposable {
         isStale: true,
         staleMinutes: age,
         data: {
-          utilization5h: normalizeUtilization(u.utilization5h),
-          utilization7d: normalizeUtilization(u.utilization7d),
+          utilization5h: norm(u.utilization5h),
+          utilization7d: norm(u.utilization7d),
           reset5hAt: u.reset5hAt,
           reset7dAt: u.reset7dAt,
           limitStatus: u.limitStatus,
@@ -363,7 +367,7 @@ export class UsageService implements vscode.Disposable {
                 ...u.extraUsage,
                 utilization:
                   u.extraUsage.utilization !== undefined
-                    ? normalizeUtilization(u.extraUsage.utilization)
+                    ? norm(u.extraUsage.utilization)
                     : undefined,
               }
             : undefined,
