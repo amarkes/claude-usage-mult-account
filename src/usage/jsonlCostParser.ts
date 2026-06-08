@@ -50,10 +50,11 @@ function dateKey(iso?: string): string {
 async function collectJsonlFiles(
   roots: string[],
   workspacePath?: string,
-  workspaceOnly?: boolean
+  workspaceOnly?: boolean,
+  days = 7
 ): Promise<string[]> {
   const files: string[] = [];
-  const cutoff = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - (days + 1) * 24 * 60 * 60 * 1000;
 
   async function walk(dir: string, projectName: string): Promise<void> {
     if (workspaceOnly && workspacePath && !projectPathMatchesWorkspace(projectName, workspacePath)) {
@@ -136,11 +137,12 @@ export async function parseCostsFromJsonl(options: {
   workspaceOnly?: boolean;
   days?: number;
 }): Promise<CostSummary> {
-  const days = options.days ?? 7;
+  const days = options.days ?? 30;
   const files = await collectJsonlFiles(
     options.projectsRoots,
     options.workspacePath,
-    options.workspaceOnly
+    options.workspaceOnly,
+    days
   );
 
   const byDay = new Map<string, DailyCostRow>();

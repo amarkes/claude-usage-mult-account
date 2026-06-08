@@ -2,6 +2,10 @@
 
 All notable changes to this extension are documented here.
 
+## [1.7.4] - 2026-06-08
+- add more days in graphic
+
+
 ## [1.7.3] - 2026-05-29
 - feat: new status
 

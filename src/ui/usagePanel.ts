@@ -29,12 +29,15 @@ function renderChart(daily: FullUsageState["costs"]["daily"]): string {
     return '<p class="muted">Sem dados de custo nos JSONL desta conta.</p>';
   }
   const max = Math.max(...daily.map((d) => d.costUsd), 0.01);
+  // Show date label every N bars to avoid crowding
+  const labelEvery = daily.length > 14 ? 7 : daily.length > 7 ? 3 : 1;
   const bars = daily
-    .map((d) => {
+    .map((d, i) => {
       const h = Math.round((d.costUsd / max) * 120);
+      const showLabel = i === 0 || i === daily.length - 1 || (i + 1) % labelEvery === 0;
       return `<div class="chart-col" title="${esc(d.date)}: ${formatUsd(d.costUsd)}">
         <div class="chart-bar" style="height:${h}px"></div>
-        <div class="chart-label">${esc(d.date.slice(5))}</div>
+        <div class="chart-label">${showLabel ? esc(d.date.slice(5)) : ""}</div>
         <div class="chart-val">${formatUsd(d.costUsd)}</div>
       </div>`;
     })
@@ -168,7 +171,7 @@ function renderHtml(
   <h3>Custo desta conta (JSONL)</h3>
   <div class="cost-grid">
     <div class="cost-card"><span class="muted">Hoje</span><strong>${formatUsd(costs.todayUsd)}</strong></div>
-    <div class="cost-card"><span class="muted">${costs.daily.length} dias</span><strong>${formatUsd(costs.weekUsd)}</strong></div>
+    <div class="cost-card"><span class="muted">Últimos ${costs.daily.length} dias</span><strong>${formatUsd(costs.weekUsd)}</strong></div>
   </div>
   ${costs.workspaceTodayUsd !== undefined ? `<p>Workspace hoje: <strong>${formatUsd(costs.workspaceTodayUsd)}</strong></p>` : ""}
   ${renderChart(costs.daily)}
