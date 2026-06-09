@@ -2,6 +2,10 @@
 
 All notable changes to this extension are documented here.
 
+## [1.8.0] - 2026-06-09
+- new grapfics for tokens and fixes value grapfics
+
+
 ## [1.7.4] - 2026-06-08
 - add more days in graphic
 

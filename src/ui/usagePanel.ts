@@ -16,6 +16,12 @@ import {
 } from "./modelBreakdownHtml";
 import { formatPercent, formatResetTime, formatUsd } from "./format";
 
+function fmtK(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -24,25 +30,96 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function fillDailyGaps(
+  daily: FullUsageState["costs"]["daily"]
+): FullUsageState["costs"]["daily"] {
+  if (daily.length === 0) return daily;
+  const result: FullUsageState["costs"]["daily"] = [];
+  const byDate = new Map(daily.map((d) => [d.date, d]));
+  const first = new Date(daily[0].date + "T12:00:00Z");
+  const last = new Date(daily[daily.length - 1].date + "T12:00:00Z");
+  for (const cur = new Date(first); cur <= last; cur.setUTCDate(cur.getUTCDate() + 1)) {
+    const key = cur.toISOString().slice(0, 10);
+    result.push(byDate.get(key) ?? { date: key, costUsd: 0, tokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 }, messageCount: 0 });
+  }
+  return result;
+}
+
 function renderChart(daily: FullUsageState["costs"]["daily"]): string {
   if (daily.length === 0) {
     return '<p class="muted">Sem dados de custo nos JSONL desta conta.</p>';
   }
-  const max = Math.max(...daily.map((d) => d.costUsd), 0.01);
-  // Show date label every N bars to avoid crowding
-  const labelEvery = daily.length > 14 ? 7 : daily.length > 7 ? 3 : 1;
-  const bars = daily
-    .map((d, i) => {
-      const h = Math.round((d.costUsd / max) * 120);
-      const showLabel = i === 0 || i === daily.length - 1 || (i + 1) % labelEvery === 0;
-      return `<div class="chart-col" title="${esc(d.date)}: ${formatUsd(d.costUsd)}">
+  const filled = fillDailyGaps(daily);
+  const max = Math.max(...filled.map((d) => d.costUsd), 0.01);
+  const bars = filled
+    .map((d) => {
+      const h = Math.max(Math.round((d.costUsd / max) * 120), d.costUsd > 0 ? 2 : 0);
+      const valLabel = d.costUsd > 0 ? formatUsd(d.costUsd) : "";
+      const cacheIn = (d.tokens.cacheCreation + d.tokens.cacheRead).toLocaleString();
+      const tipLines = [
+        `<b>${esc(d.date)}</b>`,
+        `Custo: ${formatUsd(d.costUsd)}`,
+        `Msgs: ${d.messageCount}`,
+        `Tokens in/out: ${(d.tokens.input + d.tokens.output).toLocaleString()}`,
+        `Cache criação/leitura: ${cacheIn}`,
+      ].join("<br>");
+      return `<div class="chart-col">
+        <div class="chart-tip">${tipLines}</div>
+        <div class="chart-val">${esc(valLabel)}</div>
         <div class="chart-bar" style="height:${h}px"></div>
-        <div class="chart-label">${showLabel ? esc(d.date.slice(5)) : ""}</div>
-        <div class="chart-val">${formatUsd(d.costUsd)}</div>
+        <div class="chart-label">${esc(d.date.slice(5))}</div>
       </div>`;
     })
     .join("");
-  return `<div class="chart">${bars}</div>`;
+  return `<div class="chart-wrap" id="chartWrap"><div class="chart">${bars}</div></div>
+<script>document.getElementById('chartWrap').scrollLeft=9999;</script>`;
+}
+
+function renderTokenChart(daily: FullUsageState["costs"]["daily"]): string {
+  if (daily.length === 0) return "";
+  const filled = fillDailyGaps(daily);
+  const hasTokens = filled.some(d => d.tokens.input + d.tokens.output + d.tokens.cacheCreation + d.tokens.cacheRead > 0);
+  if (!hasTokens) return "";
+
+  const maxIn    = Math.max(...filled.map(d => d.tokens.input), 1);
+  const maxOut   = Math.max(...filled.map(d => d.tokens.output), 1);
+  const maxCache = Math.max(...filled.map(d => d.tokens.cacheCreation + d.tokens.cacheRead), 1);
+
+  const bars = filled.map((d) => {
+    const cache = d.tokens.cacheCreation + d.tokens.cacheRead;
+    const total = d.tokens.input + d.tokens.output + cache;
+    const inH    = Math.max(Math.round((d.tokens.input / maxIn)    * 120), d.tokens.input > 0 ? 2 : 0);
+    const outH   = Math.max(Math.round((d.tokens.output / maxOut)  * 120), d.tokens.output > 0 ? 2 : 0);
+    const cacheH = Math.max(Math.round((cache / maxCache)          * 120), cache > 0 ? 2 : 0);
+    const tipLines = [
+      `<b>${esc(d.date)}</b>`,
+      `Input: ${fmtK(d.tokens.input)}`,
+      `Output: ${fmtK(d.tokens.output)}`,
+      `Cache: ${fmtK(cache)}`,
+      `Total: ${fmtK(total)}`,
+    ].join("<br>");
+    const bar = (h: number, color: string) =>
+      `<div style="width:8px;height:${h}px;background:${color};border-radius:2px 2px 0 0;flex-shrink:0"></div>`;
+    return `<div class="chart-col tok-col">
+      <div class="chart-tip">${tipLines}</div>
+      <div class="chart-val">${total > 0 ? esc(fmtK(total)) : ""}</div>
+      <div style="display:flex;align-items:flex-end;gap:2px;height:120px">
+        ${bar(inH, "#4e9de0")}${bar(outH, "#4ec9b0")}${bar(cacheH, "#c586c0")}
+      </div>
+      <div class="chart-label">${esc(d.date.slice(5))}</div>
+    </div>`;
+  }).join("");
+
+  const legend = `<div class="token-legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#4e9de0"></span>Input</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#4ec9b0"></span>Output</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#c586c0"></span>Cache</span>
+  </div>`;
+
+  return `<h3>Tokens por dia</h3>
+  ${legend}
+  <div class="chart-wrap" id="tokenChartWrap"><div class="chart">${bars}</div></div>
+  <script>document.getElementById('tokenChartWrap').scrollLeft=9999;</script>`;
 }
 
 function renderHtml(
@@ -109,8 +186,18 @@ function renderHtml(
     extra = `<div class="team-grid">${limitLine}${usedLine}${remainingLine}${avgLine}</div>`;
   }
 
-  const statsLine = statsCache?.totalCostUsd
-    ? `<p class="muted">stats-cache.json: ${formatUsd(statsCache.totalCostUsd)}</p>`
+  const staleBanner = snapshot.isStale && snapshot.staleMinutes !== undefined
+    ? `<div class="stale-banner">⚠ Dados desatualizados há ${snapshot.staleMinutes} min — API indisponível ou em cooldown</div>`
+    : "";
+
+  const statsLine = statsCache
+    ? (() => {
+        const parts: string[] = [];
+        if (statsCache.totalCostUsd) parts.push(`Custo histórico: ${formatUsd(statsCache.totalCostUsd)}`);
+        if (statsCache.totalInputTokens) parts.push(`Tokens entrada: ${statsCache.totalInputTokens.toLocaleString()}`);
+        if (statsCache.totalOutputTokens) parts.push(`Tokens saída: ${statsCache.totalOutputTokens.toLocaleString()}`);
+        return parts.length ? `<p class="muted">stats-cache.json — ${parts.join(" · ")}</p>` : "";
+      })()
     : "";
 
   const extraOnly = data.quotaFromExtraOnly === true;
@@ -134,11 +221,22 @@ function renderHtml(
     .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
     .cost-card { padding: 12px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; }
     .cost-card strong { font-size: 20px; display: block; }
-    .chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; margin: 16px 0; padding-top: 8px; }
-    .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
-    .chart-bar { width: 100%; max-width: 48px; background: var(--vscode-charts-blue, var(--vscode-button-background)); border-radius: 4px 4px 0 0; min-height: 2px; }
-    .chart-label { font-size: 10px; margin-top: 4px; opacity: 0.75; }
-    .chart-val { font-size: 10px; opacity: 0.9; }
+    .chart-wrap { overflow-x: auto; margin: 16px 0; padding-bottom: 4px; }
+    .chart { display: flex; align-items: flex-end; gap: 6px; min-width: max-content; padding: 0 2px; padding-top: 80px; }
+    .chart-col { display: flex; flex-direction: column; align-items: center; width: 36px; flex-shrink: 0; position: relative; cursor: default; }
+    .chart-col:hover .chart-bar { opacity: 0.7; }
+    .chart-col:hover .chart-tip { display: block; }
+    .chart-tip { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--vscode-editorHoverWidget-background, #1e1e1e); border: 1px solid var(--vscode-editorHoverWidget-border, #454545); border-radius: 4px; padding: 6px 10px; font-size: 11px; white-space: nowrap; z-index: 100; text-align: left; line-height: 1.6; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .chart-bar { width: 28px; background: var(--vscode-charts-blue, var(--vscode-button-background)); border-radius: 3px 3px 0 0; transition: opacity 0.1s; }
+    .chart-val { font-size: 9px; opacity: 0.8; margin-bottom: 3px; white-space: nowrap; min-height: 12px; }
+    .chart-label { font-size: 9px; margin-top: 4px; opacity: 0.6; white-space: nowrap; }
+    .stale-banner { background: var(--vscode-editorWarning-background, rgba(255,200,0,0.1)); border: 1px solid var(--vscode-editorWarning-foreground); border-radius: 4px; padding: 6px 10px; font-size: 12px; margin-bottom: 12px; color: var(--vscode-editorWarning-foreground); }
+    .estimated-badge { font-size: 10px; opacity: 0.65; font-weight: normal; margin-left: 6px; }
+    .token-legend { display: flex; gap: 14px; font-size: 11px; margin-bottom: 6px; opacity: 0.85; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .tok-col { width: 42px !important; }
+    .tok-col .chart-tip { white-space: nowrap; }
     .muted { opacity: 0.65; font-size: 12px; }
     .source { margin-top: 24px; font-size: 11px; opacity: 0.6; }
     .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 18px; }
@@ -159,6 +257,7 @@ function renderHtml(
     <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()">↻ Atualizar</button>
     <span class="refresh-status" id="refreshStatus"></span>
   </div>
+  ${staleBanner}
   ${accountBlock}
 
   <h3>Quota — ${esc(state.activeConfig.label)}</h3>
@@ -168,7 +267,7 @@ function renderHtml(
   ${data.limitStatus ? `<p>Status: <strong>${esc(data.limitStatus)}</strong></p>` : ""}
   ${extra}
 
-  <h3>Custo desta conta (JSONL)</h3>
+  <h3>Custo desta conta (JSONL)${costs.estimated ? '<span class="estimated-badge">estimado</span>' : ''}</h3>
   <div class="cost-grid">
     <div class="cost-card"><span class="muted">Hoje</span><strong>${formatUsd(costs.todayUsd)}</strong></div>
     <div class="cost-card"><span class="muted">Últimos ${costs.daily.length} dias</span><strong>${formatUsd(costs.weekUsd)}</strong></div>
@@ -176,10 +275,12 @@ function renderHtml(
   ${costs.workspaceTodayUsd !== undefined ? `<p>Workspace hoje: <strong>${formatUsd(costs.workspaceTodayUsd)}</strong></p>` : ""}
   ${renderChart(costs.daily)}
 
+  ${renderTokenChart(costs.daily)}
+
   ${renderModelBreakdown(costs.byModel, `${costs.daily.length} dias`)}
 
   ${statsLine}
-  <p class="source">${esc(state.activeConfig.dir)} · ${snapshot.source} · ${esc(snapshot.updatedAt)}</p>
+  <p class="source">${esc(state.activeConfig.dir)} · ${snapshot.source} · ${esc(snapshot.updatedAt)} · ${costs.filesScanned} arquivo(s) JSONL</p>
   <script>
     const vscode = (window.__cvscode = acquireVsCodeApi());
     function doRefresh() {

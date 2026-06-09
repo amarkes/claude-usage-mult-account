@@ -2,7 +2,7 @@
   "name": "claude-status-usage-multi-account",
   "displayName": "Claude StatusUsage Multi Account",
   "description": "Quota, custo estimado e histórico local do Claude Code no VS Code",
-  "version": "1.7.4",
+  "version": "1.8.0",
   "publisher": "ClaudeStatusUsageMultiAccount",
   "icon": "./images/icon.png",
   "repository": {

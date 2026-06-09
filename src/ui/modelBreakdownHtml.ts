@@ -23,13 +23,14 @@ export function renderModelBreakdown(
       const pct = Math.min(100, Math.round((m.costUsd / maxCost) * 100));
       const share = formatPercent(m.shareOfCost);
       const tokens = m.tokens;
-      const tokenSummary = `${(tokens.input + tokens.output).toLocaleString()} tok`;
+      const inOut = (tokens.input + tokens.output).toLocaleString();
+      const cache = (tokens.cacheCreation + tokens.cacheRead).toLocaleString();
       return `<tr>
         <td>${esc(m.displayName)}</td>
         <td class="bar-cell"><div class="model-bar"><div class="model-fill" style="width:${pct}%"></div></div></td>
         <td>${formatUsd(m.costUsd)}</td>
         <td>${share}</td>
-        <td class="muted">${m.messageCount} msgs · ${tokenSummary}</td>
+        <td class="muted">${m.messageCount} msgs · ${inOut} tok · cache ${cache}</td>
       </tr>`;
     })
     .join("");
