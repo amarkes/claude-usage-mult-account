@@ -187,7 +187,7 @@ function renderHtml(
   }
 
   const staleBanner = snapshot.isStale && snapshot.staleMinutes !== undefined
-    ? `<div class="stale-banner">⚠ Dados desatualizados há ${snapshot.staleMinutes} min — API indisponível ou em cooldown</div>`
+    ? `<div class="stale-banner">⚠ Dados desatualizados há ${snapshot.staleMinutes} min${snapshot.apiErrorMsg ? ` — ${esc(snapshot.apiErrorMsg)}` : " — API indisponível ou em cooldown"}</div>`
     : "";
 
   const statsLine = statsCache

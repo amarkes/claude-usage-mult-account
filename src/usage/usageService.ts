@@ -54,6 +54,8 @@ export class UsageService implements vscode.Disposable {
   private readonly logger: UsageLogger;
   private costParseGeneration = 0;
   private lastApiFetchByDir = new Map<string, number>();
+  private rateLimitedUntilByDir = new Map<string, number>();
+  private refreshPromise: Promise<FullUsageState> | undefined;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -89,6 +91,23 @@ export class UsageService implements vscode.Disposable {
   }
 
   async refresh(options?: { forceApi?: boolean }): Promise<FullUsageState> {
+    // Evita varreduras de JSONL/chamadas de API sobrepostas: timer, foco de
+    // janela, watcher recursivo de projects/ e clique manual podem disparar
+    // refresh() quase ao mesmo tempo. Uma chamada forçada ainda roda de
+    // verdade, mas só depois que a que já está em andamento terminar.
+    if (this.refreshPromise) {
+      if (options?.forceApi) {
+        return this.refreshPromise.then(() => this.runRefresh(options));
+      }
+      return this.refreshPromise;
+    }
+    this.refreshPromise = this.runRefresh(options).finally(() => {
+      this.refreshPromise = undefined;
+    });
+    return this.refreshPromise;
+  }
+
+  private async runRefresh(options?: { forceApi?: boolean }): Promise<FullUsageState> {
     const paths = this.getResolvedPaths();
     const cfg = vscode.workspace.getConfiguration("claudeUsage");
     const preferApi =
@@ -110,7 +129,15 @@ export class UsageService implements vscode.Disposable {
         cfg.get<number>("apiCooldownSeconds", 90)
       ) * 1000;
 
+    const RATE_LIMIT_BACKOFF_MS = 10 * 60_000;
+
     const canCallApi = (): boolean => {
+      const rateLimitedUntil = this.rateLimitedUntilByDir.get(paths.configDir) ?? 0;
+      if (Date.now() < rateLimitedUntil) {
+        // HTTP 429 explícito: nenhum retry, nem forçado, até o backoff passar.
+        // Continuar batendo na API só renova o próprio rate limit.
+        return false;
+      }
       if (options?.forceApi) {
         return true;
       }
@@ -123,12 +150,15 @@ export class UsageService implements vscode.Disposable {
         this.logger.log("API em cooldown — usando cache");
         return null;
       }
+      // Registra a tentativa antes da chamada: assim o cooldown vale mesmo
+      // quando a requisição falha, e não só quando ela tem sucesso.
+      this.lastApiFetchByDir.set(paths.configDir, Date.now());
       try {
         const snapshot = await fetchUsageFromApi(
           credentialPaths,
           paths.configDir
         );
-        this.lastApiFetchByDir.set(paths.configDir, Date.now());
+        this.rateLimitedUntilByDir.delete(paths.configDir);
         await writeStatusCache(paths.statusCachePath, snapshot.data);
         await this.context.globalState.update(
           `quotaSnapshot:${paths.configDir}`,
@@ -140,6 +170,12 @@ export class UsageService implements vscode.Disposable {
         if (e instanceof UsageApiError) {
           apiErrorMsg = e.message;
           this.logger.log(`API: ${e.code} ${e.message}`);
+          if (e.code === "rate_limit") {
+            this.rateLimitedUntilByDir.set(
+              paths.configDir,
+              Date.now() + RATE_LIMIT_BACKOFF_MS
+            );
+          }
         } else {
           apiErrorMsg = String(e);
           this.logger.log(`API erro: ${e}`);
@@ -196,6 +232,8 @@ export class UsageService implements vscode.Disposable {
         data: { utilization5h: 0, utilization7d: 0 },
         unavailableReason: buildUnavailableReason(paths, apiErrorMsg),
       };
+    } else if (quota.isStale && apiErrorMsg) {
+      quota = { ...quota, apiErrorMsg };
     }
 
     const account = this.accountSelection.getSelectedAccount();

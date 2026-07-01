@@ -2,6 +2,14 @@
 
 All notable changes to this extension are documented here.
 
+## [1.8.2] - 2026-07-01
+- Corrige rate limit (429) persistente na API de quota: cooldown agora vale mesmo quando a chamada falha, e 429 aplica backoff de 10min que nem refresh forçado ignora. Banner de dados desatualizados agora mostra o motivo real da falha.
+
+
+## [1.8.1] - 2026-07-01
+- Corrige refresh travado indefinidamente ao clicar em Atualizar (evita chamadas concorrentes de refresh sobrepostas)
+
+
 ## [1.8.0] - 2026-06-09
 - new grapfics for tokens and fixes value grapfics
 

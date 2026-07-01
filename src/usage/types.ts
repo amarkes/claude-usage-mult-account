@@ -32,6 +32,8 @@ export interface ClaudeUsageSnapshot {
   /** Dados do cache local (API falhou ou em cooldown). */
   isStale?: boolean;
   staleMinutes?: number;
+  /** Motivo real da última falha ao buscar da API, se houver. */
+  apiErrorMsg?: string;
 }
 
 export interface TokenTotals {
