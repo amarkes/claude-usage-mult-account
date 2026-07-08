@@ -2,6 +2,18 @@
 
 All notable changes to this extension are documented here.
 
+## [1.8.5] - 2026-07-08
+- generate msx
+
+
+## [1.8.4] - 2026-07-08
+- generate msx
+
+
+## [1.8.3] - 2026-07-08
+- fix: get api
+
+
 ## [1.8.2] - 2026-07-01
 - Corrige rate limit (429) persistente na API de quota: cooldown agora vale mesmo quando a chamada falha, e 429 aplica backoff de 10min que nem refresh forçado ignora. Banner de dados desatualizados agora mostra o motivo real da falha.
 
