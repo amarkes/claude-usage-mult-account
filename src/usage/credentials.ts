@@ -9,6 +9,7 @@ export interface OAuthTokens {
   refreshToken?: string;
   expiresAt?: number;
   scopes?: string[];
+  subscriptionType?: string;
 }
 
 interface CredentialsFile {
@@ -17,6 +18,7 @@ interface CredentialsFile {
     refreshToken?: string;
     expiresAt?: number;
     scopes?: string[];
+    subscriptionType?: string;
   };
   oauthAccount?: {
     accessToken?: string;
@@ -54,6 +56,7 @@ export async function loadOAuthFromPaths(
           refreshToken: oauth.refreshToken,
           expiresAt: oauth.expiresAt,
           scopes: creds.claudeAiOauth?.scopes,
+          subscriptionType: creds.claudeAiOauth?.subscriptionType,
         },
       };
     }
@@ -148,6 +151,22 @@ async function persistRefreshedTokens(
   await fs.writeFile(credentialsPath, JSON.stringify(creds, null, 2), {
     mode: 0o600,
   });
+}
+
+/** Lê só o tipo de assinatura (pro/team/enterprise) sem tocar na rede. */
+export async function resolveSubscriptionPlan(
+  credentialPaths: string[],
+  configDir?: string
+): Promise<string | undefined> {
+  const loaded = await loadOAuthFromPaths(credentialPaths);
+  if (loaded?.tokens.subscriptionType) {
+    return loaded.tokens.subscriptionType;
+  }
+  if (configDir) {
+    const fromKeychain = await loadOAuthFromKeychain(configDir);
+    return fromKeychain?.tokens.subscriptionType;
+  }
+  return undefined;
 }
 
 export async function resolveAccessToken(

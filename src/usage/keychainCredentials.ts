@@ -13,6 +13,7 @@ interface CredentialsFile {
     refreshToken?: string;
     expiresAt?: number;
     scopes?: string[];
+    subscriptionType?: string;
   };
   oauthAccount?: {
     accessToken?: string;
@@ -52,6 +53,7 @@ function parseCredentialsJson(raw: string): OAuthTokens | null {
     refreshToken: oauth.refreshToken,
     expiresAt: oauth.expiresAt,
     scopes: creds.claudeAiOauth?.scopes,
+    subscriptionType: creds.claudeAiOauth?.subscriptionType,
   };
 }
 

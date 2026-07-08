@@ -6,6 +6,7 @@ import { cacheAgeMinutes } from "./cacheReader";
 import { normalizeUtilization } from "./utilization";
 import { writeStatusCache } from "./cacheWriter";
 import { fetchUsageFromApi, UsageApiError } from "./apiClient";
+import { resolveSubscriptionPlan } from "./credentials";
 import { UsageAlerts } from "./alerts";
 import { UsageLogger } from "./logger";
 import { parseCostsFromJsonl } from "./jsonlCostParser";
@@ -26,6 +27,10 @@ function buildUnavailableReason(
   ];
   return lines.join(" ");
 }
+
+const PRO_PLAN = "pro";
+const BUSINESS_MIN_INTERVAL_MS = 10 * 60_000;
+const PLAN_CACHE_TTL_MS = 30 * 60_000;
 
 function emptyCosts(): CostSummary {
   return {
@@ -55,6 +60,7 @@ export class UsageService implements vscode.Disposable {
   private costParseGeneration = 0;
   private lastApiFetchByDir = new Map<string, number>();
   private rateLimitedUntilByDir = new Map<string, number>();
+  private planCacheByDir = new Map<string, { plan?: string; at: number }>();
   private refreshPromise: Promise<FullUsageState> | undefined;
 
   constructor(
@@ -131,6 +137,18 @@ export class UsageService implements vscode.Disposable {
 
     const RATE_LIMIT_BACKOFF_MS = 10 * 60_000;
 
+    const resolvePlanCached = async (): Promise<string | undefined> => {
+      const cached = this.planCacheByDir.get(paths.configDir);
+      if (cached && Date.now() - cached.at < PLAN_CACHE_TTL_MS) {
+        return cached.plan;
+      }
+      const plan = await resolveSubscriptionPlan(credentialPaths, paths.configDir);
+      this.planCacheByDir.set(paths.configDir, { plan, at: Date.now() });
+      return plan;
+    };
+
+    // Contas Business/Team têm piso de 10 min mesmo com forceApi — o
+    // objetivo é limitar chamadas, não só evitar sobreposição de cliques.
     const canCallApi = (): boolean => {
       const rateLimitedUntil = this.rateLimitedUntilByDir.get(paths.configDir) ?? 0;
       if (Date.now() < rateLimitedUntil) {
@@ -138,16 +156,21 @@ export class UsageService implements vscode.Disposable {
         // Continuar batendo na API só renova o próprio rate limit.
         return false;
       }
-      if (options?.forceApi) {
-        return true;
-      }
+      const minIntervalMs = Math.max(apiCooldownMs, BUSINESS_MIN_INTERVAL_MS);
       const last = this.lastApiFetchByDir.get(paths.configDir) ?? 0;
-      return Date.now() - last >= apiCooldownMs;
+      return Date.now() - last >= minIntervalMs;
     };
 
     const fetchApiLive = async (): Promise<ClaudeUsageSnapshot | null> => {
+      const plan = await resolvePlanCached();
+      if (plan === PRO_PLAN) {
+        // Contas Pro não têm as janelas 5h/7d na API de uso (só retornam
+        // 401/dados incompletos) — não vale a pena manter batendo nela.
+        this.logger.log("Conta Pro: GET na API de uso desativado, usando cache local");
+        return null;
+      }
       if (!canCallApi()) {
-        this.logger.log("API em cooldown — usando cache");
+        this.logger.log("API em cooldown (mínimo 10min para contas Business/Team) — usando cache");
         return null;
       }
       // Registra a tentativa antes da chamada: assim o cooldown vale mesmo
